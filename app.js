@@ -6,12 +6,13 @@ const STORAGE_KEY = "esp-node-control-panel-v1";
 
 const fields = {
   deviceId: document.querySelector("#deviceId"), hostId: document.querySelector("#hostId"),
-  channelKey: document.querySelector("#channelKey"), wifiSsid: document.querySelector("#wifiSsid"),
+  hostKey: document.querySelector("#hostKey"), hostLocation: document.querySelector("#hostLocation"),
+  mdnsEnabled: document.querySelector("#mdnsEnabled"), mdnsHostname: document.querySelector("#mdnsHostname"),
+  arpSubnet: document.querySelector("#arpSubnet"), clientMdnsHostname: document.querySelector("#clientMdnsHostname"),
+  manualHostLocation: document.querySelector("#manualHostLocation"), wifiSsid: document.querySelector("#wifiSsid"),
   wifiPassword: document.querySelector("#wifiPassword"), ipMode: document.querySelector("#ipMode"),
   staticIp: document.querySelector("#staticIp"), vpsUrl: document.querySelector("#vpsUrl"),
-  healthPath: document.querySelector("#healthPath"), dataPath: document.querySelector("#dataPath"),
-  apiToken: document.querySelector("#apiToken"), deviceUrl: document.querySelector("#deviceUrl"),
-  configPath: document.querySelector("#configPath")
+  apiToken: document.querySelector("#apiToken"), deviceUrl: document.querySelector("#deviceUrl")
 };
 const steps = {
   config: document.querySelector('[data-step="config"]'), wifi: document.querySelector('[data-step="wifi"]'),
@@ -19,7 +20,7 @@ const steps = {
 };
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const nodeMode = () => form.elements.nodeMode.value;
-const normalizePath = (value) => value.trim().startsWith("/") ? value.trim() : `/${value.trim()}`;
+const discoveryMethod = () => form.elements.discoveryMethod.value;
 const joinUrl = (base, path) => `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 
 function buildConfig(includeSecrets = false) {
@@ -34,13 +35,23 @@ function buildConfig(includeSecrets = false) {
         ...(fields.ipMode.value === "static" ? { staticIp: fields.staticIp.value.trim() } : {})
       },
       vps: {
-        baseUrl: fields.vpsUrl.value.trim(), healthPath: normalizePath(fields.healthPath.value),
-        dataPath: normalizePath(fields.dataPath.value),
+        brokerUrl: fields.vpsUrl.value.trim(), transport: "mqtt-over-wss",
         token: includeSecrets ? fields.apiToken.value : fields.apiToken.value ? "••••••••" : ""
+      },
+      host: {
+        key: includeSecrets ? fields.hostKey.value : fields.hostKey.value ? "••••••••" : "",
+        location: fields.hostLocation.value.trim(),
+        mdns: { enabled: fields.mdnsEnabled.value === "enabled", hostname: fields.mdnsHostname.value.trim() }
       }
     } : {
       hostId: fields.hostId.value.trim(),
-      channelKey: includeSecrets ? fields.channelKey.value : fields.channelKey.value ? "••••••••" : ""
+      hostKey: includeSecrets ? fields.hostKey.value : fields.hostKey.value ? "••••••••" : "",
+      discovery: {
+        method: discoveryMethod(),
+        ...(discoveryMethod() === "arp" ? { subnet: fields.arpSubnet.value.trim() } : {}),
+        ...(discoveryMethod() === "mdns" ? { hostname: fields.clientMdnsHostname.value.trim() } : {}),
+        ...(discoveryMethod() === "manual" ? { hostLocation: fields.manualHostLocation.value.trim() } : {})
+      }
     }
   };
 }
@@ -51,8 +62,16 @@ function setMode(mode) {
   document.querySelectorAll(".host-only").forEach((el) => { el.hidden = !isHost; });
   document.querySelectorAll(".client-only").forEach((el) => { el.hidden = isHost; });
   fields.wifiSsid.required = isHost; fields.wifiPassword.required = isHost; fields.vpsUrl.required = isHost;
-  fields.hostId.required = !isHost; fields.channelKey.required = !isHost;
+  fields.hostLocation.required = isHost; fields.mdnsHostname.required = isHost && fields.mdnsEnabled.value === "enabled";
+  fields.hostId.required = !isHost; fields.hostKey.required = true;
+  setDiscoveryMethod(discoveryMethod());
   updatePreview();
+}
+function setDiscoveryMethod(method) {
+  document.querySelectorAll(".discovery-field").forEach((el) => { el.hidden = el.dataset.discovery !== method; });
+  fields.arpSubnet.required = nodeMode() === "client" && method === "arp";
+  fields.clientMdnsHostname.required = nodeMode() === "client" && method === "mdns";
+  fields.manualHostLocation.required = nodeMode() === "client" && method === "manual";
 }
 function showToast(message, type = "success") {
   toast.textContent = message; toast.className = `toast show ${type === "error" ? "error" : ""}`;
@@ -71,16 +90,23 @@ function validateForm() {
   Object.values(fields).forEach((input) => setFieldError(input));
   let valid = true;
   const required = nodeMode() === "host"
-    ? [fields.deviceId, fields.wifiSsid, fields.wifiPassword, fields.vpsUrl, fields.healthPath, fields.dataPath]
-    : [fields.deviceId, fields.hostId, fields.channelKey];
+    ? [fields.deviceId, fields.hostKey, fields.hostLocation, fields.wifiSsid, fields.wifiPassword, fields.vpsUrl]
+    : [fields.deviceId, fields.hostId, fields.hostKey,
+        discoveryMethod() === "arp" ? fields.arpSubnet : discoveryMethod() === "mdns" ? fields.clientMdnsHostname : fields.manualHostLocation];
   required.forEach((input) => { if (!input.value.trim()) { setFieldError(input, "此欄位不能留空"); valid = false; } });
   if (fields.deviceId.value && !/^[A-Za-z0-9_-]+$/.test(fields.deviceId.value)) { setFieldError(fields.deviceId, "ID 格式不正確"); valid = false; }
   if (nodeMode() === "host" && fields.wifiPassword.value && fields.wifiPassword.value.length < 8) { setFieldError(fields.wifiPassword, "Wi-Fi 密碼至少需要 8 個字元"); valid = false; }
   if (nodeMode() === "host" && fields.vpsUrl.value) {
-    try { new URL(fields.vpsUrl.value); } catch { setFieldError(fields.vpsUrl, "請輸入完整網址，例如 https://vps.example.com:5000"); valid = false; }
+    try {
+      const url = new URL(fields.vpsUrl.value);
+      if (!["ws:", "wss:"].includes(url.protocol)) throw new Error();
+    } catch { setFieldError(fields.vpsUrl, "請輸入 ws:// 或 wss:// MQTT Broker URL"); valid = false; }
   }
   if (fields.ipMode.value === "static" && !validIp(fields.staticIp.value)) { setFieldError(fields.staticIp, "請輸入有效的 IPv4 位址"); valid = false; }
   if (nodeMode() === "client" && fields.hostId.value === fields.deviceId.value) { setFieldError(fields.hostId, "主機 ID 不可與裝置 ID 相同"); valid = false; }
+  if (nodeMode() === "host" && fields.mdnsEnabled.value === "enabled" && !/^[A-Za-z0-9-]+\.local$/.test(fields.mdnsHostname.value)) { setFieldError(fields.mdnsHostname, "請使用有效的 .local 名稱，例如 mdns.local"); valid = false; }
+  if (nodeMode() === "client" && discoveryMethod() === "mdns" && !/^[A-Za-z0-9-]+\.local$/.test(fields.clientMdnsHostname.value)) { setFieldError(fields.clientMdnsHostname, "請輸入 .local 主機名稱"); valid = false; }
+  if (nodeMode() === "client" && discoveryMethod() === "arp" && !/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(fields.arpSubnet.value)) { setFieldError(fields.arpSubnet, "請輸入 CIDR 網段，例如 192.168.4.0/24"); valid = false; }
   return valid;
 }
 
@@ -98,6 +124,17 @@ function setOverall(state, text) {
   document.querySelector("#sidebarStatus").textContent = text;
 }
 
+function testWebSocket(url) {
+  return new Promise((resolve, reject) => {
+    let socket;
+    const timeout = setTimeout(() => { socket?.close(); reject(new Error("MQTT WebSocket 連線逾時")); }, 8000);
+    try { socket = new WebSocket(url, "mqtt"); }
+    catch (error) { clearTimeout(timeout); reject(error); return; }
+    socket.addEventListener("open", () => { clearTimeout(timeout); socket.close(1000); resolve(); }, { once: true });
+    socket.addEventListener("error", () => { clearTimeout(timeout); reject(new Error("無法建立 MQTT WebSocket 連線")); }, { once: true });
+  });
+}
+
 async function runConnectionTest() {
   resetSteps(); setOverall("testing", "測試中");
   const button = document.querySelector("#testButton"); button.disabled = true;
@@ -110,28 +147,23 @@ async function runConnectionTest() {
       steps.wifi.className = "done"; steps.vps.className = "done"; steps.ready.className = "done";
       document.querySelector("#wifiStatus").textContent = "由主機提供網路";
       document.querySelector("#vpsStatus").textContent = "由主機轉送資料";
-      document.querySelector("#channelStatus").textContent = `已配對 ${fields.hostId.value.trim()}`;
+      const methodText = { arp: `ARP 掃描 ${fields.arpSubnet.value.trim()}`, mdns: fields.clientMdnsHostname.value.trim(), manual: fields.manualHostLocation.value.trim() };
+      document.querySelector("#channelStatus").textContent = `${methodText[discoveryMethod()]}，配對 ${fields.hostId.value.trim()}`;
     } else {
       steps.wifi.className = "active"; document.querySelector("#wifiStatus").textContent = `連接 ${fields.wifiSsid.value.trim()}`;
       await wait(demoMode.checked ? 650 : 250); steps.wifi.className = "done"; document.querySelector("#wifiStatus").textContent = "網路設定可用";
       steps.vps.className = "active"; document.querySelector("#vpsStatus").textContent = "正在檢查服務";
       if (demoMode.checked) await wait(800);
-      else {
-        const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 8000);
-        const response = await fetch(joinUrl(fields.vpsUrl.value, fields.healthPath.value), {
-          method: "GET", headers: fields.apiToken.value ? { Authorization: `Bearer ${fields.apiToken.value}` } : {}, signal: controller.signal
-        });
-        clearTimeout(timeout); if (!response.ok) throw new Error(`VPS 回應 ${response.status}`);
-      }
-      steps.vps.className = "done"; document.querySelector("#vpsStatus").textContent = demoMode.checked ? "示範連線成功" : "VPS 回應正常";
-      steps.ready.className = "done"; document.querySelector("#channelStatus").textContent = `資料將送往 ${normalizePath(fields.dataPath.value)}`;
+      else await testWebSocket(fields.vpsUrl.value);
+      steps.vps.className = "done"; document.querySelector("#vpsStatus").textContent = demoMode.checked ? "示範連線成功" : "MQTT WebSocket 可連線";
+      steps.ready.className = "done"; document.querySelector("#channelStatus").textContent = "MQTT over WSS 資料通道已就緒";
     }
     const elapsed = Math.max(1, Math.round(performance.now() - startedAt));
     document.querySelector("#latencyValue").textContent = `${demoMode.checked ? Math.floor(28 + Math.random() * 25) : elapsed} ms`;
     setOverall("success", "連線正常"); showToast(demoMode.checked ? "示範連線測試完成" : "VPS 連線測試完成");
   } catch (error) {
     const activeStep = Object.values(steps).find((step) => step.classList.contains("active")); if (activeStep) activeStep.className = "error";
-    setOverall("error", "連線失敗"); showToast(error.name === "AbortError" ? "VPS 連線逾時，請檢查網址與防火牆" : error.message, "error");
+    setOverall("error", "連線失敗"); showToast(error.message, "error");
   } finally { button.disabled = false; }
 }
 
@@ -150,7 +182,7 @@ async function applyToDevice() {
     if (demoMode.checked) await wait(900);
     else {
       const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 8000);
-      const response = await fetch(joinUrl(fields.deviceUrl.value, fields.configPath.value), {
+      const response = await fetch(joinUrl(fields.deviceUrl.value, "/config"), {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(buildConfig(true)), signal: controller.signal
       });
       clearTimeout(timeout); if (!response.ok) throw new Error(`裝置回應 ${response.status}`);
@@ -166,9 +198,19 @@ function loadSavedSettings() {
     const mode = data.device?.mode === "client" ? "client" : "host"; form.elements.nodeMode.value = mode;
     if (mode === "host") {
       fields.wifiSsid.value = data.connection?.wifi?.ssid || ""; fields.ipMode.value = data.connection?.wifi?.ipMode || "dhcp";
-      fields.staticIp.value = data.connection?.wifi?.staticIp || ""; fields.vpsUrl.value = data.connection?.vps?.baseUrl || "";
-      fields.healthPath.value = data.connection?.vps?.healthPath || "/status"; fields.dataPath.value = data.connection?.vps?.dataPath || "/data";
-    } else fields.hostId.value = data.connection?.hostId || "";
+      fields.staticIp.value = data.connection?.wifi?.staticIp || "";
+      fields.vpsUrl.value = data.connection?.vps?.brokerUrl || data.connection?.vps?.baseUrl || "";
+      fields.hostLocation.value = data.connection?.host?.location || fields.hostLocation.value;
+      fields.mdnsEnabled.value = data.connection?.host?.mdns?.enabled === false ? "disabled" : "enabled";
+      fields.mdnsHostname.value = data.connection?.host?.mdns?.hostname || "mdns.local";
+    } else {
+      fields.hostId.value = data.connection?.hostId || "";
+      const discovery = data.connection?.discovery || {};
+      if (["arp", "mdns", "manual"].includes(discovery.method)) form.elements.discoveryMethod.value = discovery.method;
+      fields.arpSubnet.value = discovery.subnet || fields.arpSubnet.value;
+      fields.clientMdnsHostname.value = discovery.hostname || "mdns.local";
+      fields.manualHostLocation.value = discovery.hostLocation || "";
+    }
     document.querySelector("#saveState").textContent = "已載入上次設定"; document.querySelector("#saveTime").textContent = "請重新輸入 Wi-Fi 密碼與 Token";
     setMode(mode);
   } catch { localStorage.removeItem(STORAGE_KEY); }
@@ -177,7 +219,12 @@ function loadSavedSettings() {
 form.addEventListener("input", updatePreview);
 form.addEventListener("change", (event) => {
   if (event.target.name === "nodeMode") setMode(event.target.value);
+  if (event.target.name === "discoveryMethod") setDiscoveryMethod(event.target.value);
   if (event.target === fields.ipMode) document.querySelector(".static-ip-field").hidden = event.target.value !== "static";
+  if (event.target === fields.mdnsEnabled) {
+    document.querySelector(".mdns-host-field").hidden = event.target.value !== "enabled";
+    fields.mdnsHostname.required = event.target.value === "enabled";
+  }
   updatePreview();
 });
 form.addEventListener("submit", (event) => { event.preventDefault(); saveSettings(); });
@@ -203,4 +250,7 @@ document.querySelectorAll(".nav-link").forEach((link) => link.addEventListener("
   document.querySelectorAll(".nav-link").forEach((item) => item.classList.remove("active")); link.classList.add("active"); document.querySelector(".sidebar").classList.remove("open");
 }));
 
-loadSavedSettings(); setMode(nodeMode()); document.querySelector(".static-ip-field").hidden = fields.ipMode.value !== "static"; updatePreview();
+loadSavedSettings(); setMode(nodeMode()); setDiscoveryMethod(discoveryMethod());
+document.querySelector(".static-ip-field").hidden = fields.ipMode.value !== "static";
+document.querySelector(".mdns-host-field").hidden = fields.mdnsEnabled.value !== "enabled";
+updatePreview();

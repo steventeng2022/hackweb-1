@@ -61,11 +61,37 @@
                     <span>主機連線 ID</span><input id="hostId" name="hostId" type="text" placeholder="例如 ESP-HOST-01" maxlength="32" />
                     <small>從機要配對的主機 ID</small><em class="field-error"></em>
                   </label>
-                  <label class="field client-only" hidden>
-                    <span>進階密碼</span>
-                    <div class="password-field"><input id="channelKey" name="channelKey" type="password" value="ChanKey" /><button class="reveal-button" type="button" data-target="channelKey">顯示</button></div>
+                  <label class="field">
+                    <span>主機 Key</span>
+                    <div class="password-field"><input id="hostKey" name="hostKey" type="password" value="ChanKey" /><button class="reveal-button" type="button" data-target="hostKey">顯示</button></div>
                     <small>主機與從機需使用相同密碼</small><em class="field-error"></em>
                   </label>
+                </div>
+              </div>
+
+              <div class="form-section host-only">
+                <div class="form-section-title"><span>主機探索</span><small>讓從機找到這台主機</small></div>
+                <div class="fields two-columns">
+                  <label class="field"><span>Host 位置</span><input id="hostLocation" name="hostLocation" type="text" value="192.168.4.1" placeholder="IP 或主機位置" required /><em class="field-error"></em></label>
+                  <label class="field"><span>mDNS 選項</span><select id="mdnsEnabled" name="mdnsEnabled"><option value="enabled">啟用 mDNS</option><option value="disabled">停用 mDNS</option></select></label>
+                  <label class="field span-2 mdns-host-field"><span>mDNS Hostname</span><input id="mdnsHostname" name="mdnsHostname" type="text" value="mdns.local" required /><small>區域網路內可使用此 .local 名稱尋找主機</small><em class="field-error"></em></label>
+                </div>
+              </div>
+
+              <div class="form-section client-only" hidden>
+                <div class="form-section-title"><span>尋找主機</span><small>選擇從機搜尋主機的方式</small></div>
+                <fieldset>
+                  <legend class="sr-only">主機探索方式</legend>
+                  <div class="mode-selector discovery-selector">
+                    <label><input type="radio" name="discoveryMethod" value="arp" checked /><span><b>ARP</b><small>掃描區域網路</small></span></label>
+                    <label><input type="radio" name="discoveryMethod" value="mdns" /><span><b>mDNS</b><small>使用 .local 名稱</small></span></label>
+                    <label><input type="radio" name="discoveryMethod" value="manual" /><span><b>手動</b><small>輸入 Host 位置</small></span></label>
+                  </div>
+                </fieldset>
+                <div class="fields two-columns discovery-fields">
+                  <label class="field discovery-field" data-discovery="arp"><span>ARP 網段</span><input id="arpSubnet" name="arpSubnet" type="text" value="192.168.4.0/24" /><small>ESP NODE 會在此網段搜尋主機</small><em class="field-error"></em></label>
+                  <label class="field discovery-field" data-discovery="mdns" hidden><span>mDNS Hostname</span><input id="clientMdnsHostname" name="clientMdnsHostname" type="text" value="mdns.local" /><em class="field-error"></em></label>
+                  <label class="field discovery-field" data-discovery="manual" hidden><span>Host 位置</span><input id="manualHostLocation" name="manualHostLocation" type="text" placeholder="例如 192.168.4.1" /><em class="field-error"></em></label>
                 </div>
               </div>
 
@@ -82,20 +108,17 @@
               <div class="form-section host-only">
                 <div class="form-section-title"><span>VPS</span><small>資料接收服務的位置與驗證</small></div>
                 <div class="fields two-columns">
-                  <label class="field span-2"><span>VPS 網址</span><input id="vpsUrl" name="vpsUrl" type="url" placeholder="https://vps.example.com:5000" required /><small>請包含 http:// 或 https://，也可指定連接埠</small><em class="field-error"></em></label>
-                  <label class="field"><span>狀態檢查路徑</span><input id="healthPath" name="healthPath" type="text" value="/status" required /><small>目前 Flask 服務可使用 /status</small><em class="field-error"></em></label>
-                  <label class="field"><span>資料上傳路徑</span><input id="dataPath" name="dataPath" type="text" value="/data" required /><em class="field-error"></em></label>
+                  <label class="field span-2"><span>MQTT Broker URL</span><input id="vpsUrl" name="vpsUrl" type="url" placeholder="wss://mqtt.example.com/mqtt" required /><small>Cloudflare Tunnel 請使用 wss://，路徑直接包含在網址內</small><em class="field-error"></em></label>
                   <label class="field span-2"><span>API Token <i>選填</i></span><div class="password-field"><input id="apiToken" name="apiToken" type="password" autocomplete="off" placeholder="VPS 需要驗證時填寫" /><button class="reveal-button" type="button" data-target="apiToken">顯示</button></div></label>
                 </div>
               </div>
 
-              <details class="advanced-settings">
+              <details class="advanced-settings host-only">
                 <summary>ESP NODE 寫入端點</summary>
-                <div class="fields two-columns">
+                <div class="fields">
                   <label class="field"><span>裝置管理網址</span><input id="deviceUrl" name="deviceUrl" type="url" value="http://192.168.4.1" /></label>
-                  <label class="field"><span>設定寫入路徑</span><input id="configPath" name="configPath" type="text" value="/config" /></label>
                 </div>
-                <p>關閉示範模式後，「套用到裝置」會將 JSON 設定以 POST 傳送到此端點。</p>
+                <p>關閉示範模式後，「套用到裝置」會將 JSON 設定傳送到裝置固定的 /config API。</p>
               </details>
 
               <div class="form-actions">
