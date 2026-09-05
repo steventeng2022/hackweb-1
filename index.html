@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="ESP NODE 網路與 VPS 連線設定面板" />
+    <title>ESP NODE 設定中心</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#settings" aria-label="ESP NODE 設定中心首頁">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span><strong>ESP NODE</strong><small>CONTROL PANEL</small></span>
+        </a>
+        <nav aria-label="設定導覽">
+          <a class="nav-link active" href="#settings"><span>01</span>連線設定</a>
+          <a class="nav-link" href="#vps-status"><span>02</span>連線狀態</a>
+          <a class="nav-link" href="#config-preview"><span>03</span>設定預覽</a>
+        </nav>
+        <div class="device-card">
+          <span class="status-light idle" id="sidebarLight"></span>
+          <div><small>裝置狀態</small><strong id="sidebarStatus">等待設定</strong></div>
+        </div>
+        <p class="version">Firmware v1.4.2</p>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <button class="menu-button" id="menuButton" type="button" aria-label="開啟選單">☰</button>
+          <div><p>DEVICE CONFIGURATION</p><h1>ESP NODE 設定中心</h1></div>
+          <div class="top-status"><span class="status-light"></span><div><small>管理介面</small><strong>已就緒</strong></div></div>
+        </header>
+
+        <div class="workspace">
+          <section class="content" id="settings">
+            <div class="section-heading">
+              <div><span class="section-number">01</span><div><p>CONNECTION SETUP</p><h2>裝置與 VPS 連線設定</h2></div></div>
+              <label class="demo-toggle"><input id="demoMode" type="checkbox" checked /><span></span>本機示範模式</label>
+            </div>
+
+            <form id="settingsForm" novalidate>
+              <fieldset class="mode-fieldset">
+                <legend>節點模式</legend>
+                <div class="mode-selector">
+                  <label><input type="radio" name="nodeMode" value="host" checked /><span><b>主機</b><small>建立網路並連接 VPS</small></span></label>
+                  <label><input type="radio" name="nodeMode" value="client" /><span><b>從機</b><small>配對主機並轉送資料</small></span></label>
+                </div>
+              </fieldset>
+
+              <div class="form-section">
+                <div class="form-section-title"><span>裝置</span><small>辨識這台 ESP NODE</small></div>
+                <div class="fields two-columns">
+                  <label class="field">
+                    <span>裝置 ID</span>
+                    <input id="deviceId" name="deviceId" type="text" value="ESP-NODE-01" maxlength="32" required pattern="[A-Za-z0-9_-]+" />
+                    <small>限英文字母、數字、底線與連字號</small><em class="field-error"></em>
+                  </label>
+                  <label class="field client-only" hidden>
+                    <span>主機連線 ID</span><input id="hostId" name="hostId" type="text" placeholder="例如 ESP-HOST-01" maxlength="32" />
+                    <small>從機要配對的主機 ID</small><em class="field-error"></em>
+                  </label>
+                  <label class="field client-only" hidden>
+                    <span>進階密碼</span>
+                    <div class="password-field"><input id="channelKey" name="channelKey" type="password" value="ChanKey" /><button class="reveal-button" type="button" data-target="channelKey">顯示</button></div>
+                    <small>主機與從機需使用相同密碼</small><em class="field-error"></em>
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-section host-only">
+                <div class="form-section-title"><span>Wi-Fi</span><small>ESP NODE 使用的上行網路</small></div>
+                <div class="fields two-columns">
+                  <label class="field"><span>Wi-Fi SSID</span><input id="wifiSsid" name="wifiSsid" type="text" placeholder="輸入網路名稱" required /><em class="field-error"></em></label>
+                  <label class="field"><span>Wi-Fi 密碼</span><div class="password-field"><input id="wifiPassword" name="wifiPassword" type="password" placeholder="至少 8 個字元" minlength="8" required /><button class="reveal-button" type="button" data-target="wifiPassword">顯示</button></div><em class="field-error"></em></label>
+                  <label class="field"><span>網路位址配置</span><select id="ipMode" name="ipMode"><option value="dhcp">DHCP 自動取得</option><option value="static">固定 IP</option></select></label>
+                  <label class="field static-ip-field" hidden><span>固定 IP</span><input id="staticIp" name="staticIp" type="text" inputmode="decimal" placeholder="192.168.1.80" /><em class="field-error"></em></label>
+                </div>
+              </div>
+
+              <div class="form-section host-only">
+                <div class="form-section-title"><span>VPS</span><small>資料接收服務的位置與驗證</small></div>
+                <div class="fields two-columns">
+                  <label class="field span-2"><span>VPS 網址</span><input id="vpsUrl" name="vpsUrl" type="url" placeholder="https://vps.example.com:5000" required /><small>請包含 http:// 或 https://，也可指定連接埠</small><em class="field-error"></em></label>
+                  <label class="field"><span>狀態檢查路徑</span><input id="healthPath" name="healthPath" type="text" value="/status" required /><small>目前 Flask 服務可使用 /status</small><em class="field-error"></em></label>
+                  <label class="field"><span>資料上傳路徑</span><input id="dataPath" name="dataPath" type="text" value="/data" required /><em class="field-error"></em></label>
+                  <label class="field span-2"><span>API Token <i>選填</i></span><div class="password-field"><input id="apiToken" name="apiToken" type="password" autocomplete="off" placeholder="VPS 需要驗證時填寫" /><button class="reveal-button" type="button" data-target="apiToken">顯示</button></div></label>
+                </div>
+              </div>
+
+              <details class="advanced-settings">
+                <summary>ESP NODE 寫入端點</summary>
+                <div class="fields two-columns">
+                  <label class="field"><span>裝置管理網址</span><input id="deviceUrl" name="deviceUrl" type="url" value="http://192.168.4.1" /></label>
+                  <label class="field"><span>設定寫入路徑</span><input id="configPath" name="configPath" type="text" value="/config" /></label>
+                </div>
+                <p>關閉示範模式後，「套用到裝置」會將 JSON 設定以 POST 傳送到此端點。</p>
+              </details>
+
+              <div class="form-actions">
+                <button class="button secondary" id="testButton" type="button"><span>◌</span>測試連線</button>
+                <button class="button primary" type="submit">儲存設定</button>
+                <button class="button dark" id="applyButton" type="button">套用到裝置</button>
+              </div>
+            </form>
+          </section>
+
+          <aside class="inspector">
+            <section class="status-panel" id="vps-status">
+              <div class="panel-heading"><div><p>LIVE STATUS</p><h2>連線狀態</h2></div><span class="status-badge idle" id="overallBadge">尚未測試</span></div>
+              <ol class="connection-steps">
+                <li data-step="config"><span class="step-icon">1</span><div><strong>設定檢查</strong><small id="configStatus">等待輸入設定</small></div></li>
+                <li data-step="wifi"><span class="step-icon">2</span><div><strong>Wi-Fi 網路</strong><small id="wifiStatus">尚未連線</small></div></li>
+                <li data-step="vps"><span class="step-icon">3</span><div><strong>VPS 服務</strong><small id="vpsStatus">尚未連線</small></div></li>
+                <li data-step="ready"><span class="step-icon">4</span><div><strong>資料通道</strong><small id="channelStatus">等待 VPS</small></div></li>
+              </ol>
+              <div class="latency"><span>最近延遲</span><strong id="latencyValue">-- ms</strong></div>
+            </section>
+
+            <section class="preview-panel" id="config-preview">
+              <div class="panel-heading"><div><p>CONFIG PREVIEW</p><h2>設定預覽</h2></div><button id="copyButton" class="icon-text-button" type="button">複製</button></div>
+              <pre><code id="configJson"></code></pre>
+              <div class="preview-actions">
+                <label><input id="includeSecrets" type="checkbox" />匯出時包含密碼與 Token</label>
+                <button id="exportButton" type="button">下載 JSON</button>
+              </div>
+            </section>
+            <div class="saved-note"><span>✓</span><p><strong id="saveState">尚未儲存</strong><small id="saveTime">設定只會保留在目前頁面</small></p></div>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
